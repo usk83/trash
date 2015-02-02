@@ -6,8 +6,8 @@
 #
 # Usage: trash [-rficClbVv] [-v <verbose level>] [-t <trash_box>] <file/directory>
 #
-TRASH_VERSION=v0.1.0
-TRASH_DATE="19/Oct/2014"
+TRASH_VERSION=v0.1.3
+TRASH_DATE="02/Feb/2015"
 #
 # }}}
 
@@ -43,33 +43,32 @@ fi
 # }}}
 
 # Default variables {{{
-_SENTAKU_INPUT_FILE=${TRASHLIST:-$HOME/.trashlist}
+_SENTAKU_INPUT_FILE=${TRASHLIST:-$HOME/.local/share/.trashlist}
 _SENTAKU_MAX=10000000
 _SENTAKU_SEPARATOR=$'\n'
 # }}}
 
 _sf_initialize_user () { # {{{
   # Default variables
-  rdir=0
+  rdir=1
   force=1
   confirm=0
-  tbox=${TRASHBOX:-$HOME/.Trash}
+  tbox=${TRASHBOX:-$HOME/.local/share/Trash}
   # Use more one depth directory to distinguish from other trash
   # (especially for Mac's ~/.Trash case)
-  mytbox="$tbox/my_trash_box"
-  maxboxsize=${MAXTRASHBOXSIZE:-1024} #MB
-  maxsize=${MAXTRASHSIZE:-102} #MB
+  mytbox="$tbox"
+  maxboxsize=${MAXTRASHBOXSIZE:-4096} #MB
+  maxsize=${MAXTRASHSIZE:-4096} #MB
   clean=0
   clean_full=0
   list=0
   back=0
-  verbose=0
+  verbose=1
   here=0
   trashes=()
 
   # Help
-  _s_help="
-Usage: trash [-rficClbV] [-v <verbose level>] [-t <trash_box>] <file/directory>
+  _s_help="Usage: trash [-rficClbV] [-v <verbose level>] [-t <trash_box>] <file/directory>
 
 Arguments:
    -r              Remove directory (default: $rdir)
@@ -77,7 +76,7 @@ Arguments:
    -i              Remove w/ confirmation (default: $confirm)
    -t <trash_box>  Use given trash box instead of $tbox
    -c              Clean up trash box (make it less than MAXTRASHBOXSIZE)
-   -C              Clean up trash box (make it empty)
+   -e              Clean up trash box (make it empty)
    -l              List up deleted files/directories in the trash box
    -b              Restore (turn Back) the file from the trash box
    -v <level>      Verbose level for list view
@@ -86,9 +85,6 @@ Arguments:
                    2 : With Current location (in the trash box).
    -V              Show version
    -h              Show this help
-
-To use trash, please specify following variables
-in .bashrc or your setting file like (these rh values are default):
 
 At restore mode, you can use vim like move keys like j(down)/k(up)/gg(top)/G(bottom).
 
@@ -100,28 +96,20 @@ In addition, following keys are available at restore mode:
  h     : Select to copy it to current directory (here), and quit
  /     : Search mode
  q     : Quit
-
-export TRASHLIST=~/.trashlist # Where trash list is written
-export TRASHBOX=~/.Trash # Where trash will be moved in
-                         # (.Trash is Mac's trash box)
-export MAXTRASHBOXSIZE=1024 # Max trash box size in MB
-                            # Used for clean up
-export MAXTRASHSIZE=\`echo \$MAXTRASHBOXSIZE \"*\" 0.1|bc -l|cut -d. -f1\`
-    # Trashes larger than MAXTRASHBOXSIZE will be removed by 'rm' directly
 "
 
 } # }}}
 
 _sf_check_args () { # {{{
   _s_continue=0
-  while getopts rfit:cClbVv:h OPT;do
+  while getopts rfit:celbVv:h OPT;do
     case $OPT in
       "r" ) rdir=1 ;;
       "f" ) force=1;confirm=0 ;;
       "i" ) confirm=1;force=1 ;;
       "t" ) tbox="$OPTARG" ;;
       "c" ) clean_full=0;clean=1;;
-      "C" ) clean_full=1;clean=1;;
+      "e" ) clean_full=1;clean=1;;
       "l" ) list=1 ;;
       "b" ) back=1 ;;
       "v" ) verbose=$OPTARG ;;
@@ -151,7 +139,7 @@ _sf_check_args () { # {{{
 
   # Check trashes
   if [ "${#trashes[@]}" -lt 1 ];then
-    echo "No file/directory is given." >/dev/tty
+    # echo "No file/directory is given." >/dev/tty
     echo "$_s_help" >/dev/tty
     return 1
   fi
@@ -167,10 +155,10 @@ _sf_check_args () { # {{{
   fi
 
   # Set today's trash box
-  tboxtoday="$mytbox/$(date +%Y%m%d)"
-  if [ ! -d "$tboxtoday" ];then
-    mkdir -p "$tboxtoday"
-  fi
+  # tboxtoday="$mytbox/$(date +%Y%m%d)"
+  # if [ ! -d "$tboxtoday" ];then
+  #   mkdir -p "$tboxtoday"
+  # fi
 
   # Iterate on arguments
   for t in "${trashes[@]}";do
@@ -202,7 +190,7 @@ _sf_check_args () { # {{{
 
     local origin_name=$(echo $(cd "$(dirname "$t")";pwd -P)/$(basename "$t"))
     local name=$(echo $t | sed -e "s|/$||" | sed -e "s|.*/||")
-    local trash_head="${tboxtoday}/${name}"
+    local trash_head="${mytbox}/${name}"
     local trash_name="${trash_head}"
     local i=1
     while true;do
@@ -217,7 +205,7 @@ _sf_check_args () { # {{{
     mv "$origin_name" "$trash_name"
     local origin_name_short="${origin_name/#$HOME/~}"
     local trash_name_short="${trash_name/#$HOME/~}"
-    echo "$origin_name_short was moved to $trash_name_short" >/dev/tty
+    # echo "$origin_name_short was moved to $trash_name_short" >/dev/tty
     touch "$_s_file"
     cp "$_s_file" "${_s_file}.bak"
     echo "$(date +%Y%m%d-%H:%M),$origin_name_short,$trash_name_short" > "$_s_file"
@@ -229,7 +217,7 @@ _sf_check_args () { # {{{
 cleanup () { # Clean up the trash box {{{
   # Cleanup fully
   if [ "$1" -eq 1 ];then
-    rm -rf "$mytbox/*"
+    rm -rf "${mytbox}"
     echo -n > "$_s_file"
     return 0
   fi
@@ -288,12 +276,14 @@ listup () { # List up deleted files/directories {{{
     IFS=","
     t=($line)
     IFS=$orig_ifs
+    fname=$(echo "${t[1]}" | awk -F"/" '{ print $NF }')
+    num=$((ntrash-1-$i))
     if [ "$verbose" -ge 2 ];then
-      printf "%${nwidth}d %s %s %s\n" $i "${t[0]}" "${t[1]}" "${t[2]}"
+      printf "[%${nwidth}d] %s %s\t%s %s\n" $num "${t[0]}" "${fname}" "${t[1]}" "${t[2]}"
     elif [ "$verbose" -eq 1 ];then
-      printf "%${nwidth}d %s %s \n" $i "${t[0]}" "${t[1]}"
+      printf "[%${nwidth}d] %s %s\t%s\n" $num "${t[0]}" "${fname}" "${t[1]}"
     else
-      printf "%${nwidth}d %s\n" $i "${t[1]}"
+      printf "[%${nwidth}d] %s\n" $num "${t[1]}"
     fi
     ((i--))
   done
@@ -306,14 +296,14 @@ _sf_set_header () { # {{{
   fi
   if [ "$_s_cols" -ge 62 ];then
     _s_header=" $_s_n trashes in total
- vim like move (j/k/gg/G etc...)
+ j(down), k(up), gg(top), G(bottom)
  d(delete), s(show details), q(quit)
  Enter: Select to bring back to the original place, and quit
  h: Select to copy it here (current directory), and quit
  "
   elif [ "$_s_cols" -ge 40 ];then
     _s_header=" $_s_n trashes in total
- vim like move (j/k/gg/G etc...)
+ j(down), k(up), gg(top), G(bottom)
  d(delete), s(show details), q(quit)
  Enter: Bring it back
  h: Copy it here (current directory)"
@@ -483,10 +473,10 @@ _sf_execute () { # {{{
     fi
   fi
   if [ $here -eq 1 ];then
-    echo "Copying ${origine_name} from ${trash_name_short}"
+    echo "Copying to ${origin_name}"
     cp -r "$trash_name" "$target"
   else
-    echo "Bringing ${origine_name} back from ${trash_name_short}"
+    echo "Bringing back to ${origin_name}"
     mv "$trash_name" "$target"
     _sf_delete
   fi
